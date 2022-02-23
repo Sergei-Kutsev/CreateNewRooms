@@ -25,7 +25,6 @@ namespace CreateNewRooms
             using (Transaction transaction = new Transaction(doc, "Create Room"))
             {
                 transaction.Start();
-
                 Room room = null;
                 int startNumber = 0;
 
@@ -37,13 +36,15 @@ namespace CreateNewRooms
                         if (!pc.IsRoomLocated)
                         {
                             room = doc.Create.NewRoom(null, pc);
-                            AutoTagRooms(doc, level, roomTag);
                         }
                     }
                 }
-
                 List<Room> rooms = GetRooms(doc);
 
+                foreach (Level level in levels)
+                {
+                    AutoTagRooms(doc, level, roomTag);
+                }
                 foreach (Room r in rooms)
                 {
                     // set the Room Number and Name
@@ -54,7 +55,7 @@ namespace CreateNewRooms
                 }
                 transaction.Commit();
             }
-            TaskDialog.Show("Revit", "Rooms have been successfully placed.");
+            TaskDialog.Show("Revit", "Rooms and tags have been successfully placed.");
             return Result.Succeeded;
         }
         private RoomTagType GetRoomTag(Document doc)
@@ -63,7 +64,7 @@ namespace CreateNewRooms
             .OfClass(typeof(FamilySymbol))
             .OfCategory(BuiltInCategory.OST_RoomTags)
             .Cast<RoomTagType>()
-            .Where(x => x.Name.Equals("Марки помещений"))
+            .Where(x => x.Name.Equals("Площадь помещения"))
             .FirstOrDefault();
 
             return roomTag;
@@ -88,22 +89,28 @@ namespace CreateNewRooms
         }
         public void AutoTagRooms(Document doc, Level level, RoomTagType tagType)
         {
-            PlanTopology planTopology = doc.get_PlanTopology(level);
-
-            foreach (ElementId eid in planTopology.GetRoomIds())
+            if (tagType != null)
             {
-                Room tmpRoom = doc.GetElement(eid) as Room;
-
-                if (doc.GetElement(tmpRoom.LevelId) != null && tmpRoom.Location != null)
+                PlanTopology planTopology = doc.get_PlanTopology(level);
+                foreach (ElementId eid in planTopology.GetRoomIds())
                 {
-                    
-                   LocationPoint locationPoint = tmpRoom.Location as LocationPoint;
-                    UV point = new UV(locationPoint.Point.X, locationPoint.Point.Y);
-                    RoomTag newTag = doc.Create.NewRoomTag(new LinkElementId(tmpRoom.Id), point, null);
-                    newTag.RoomTagType = tagType;
+                    Room tmpRoom = doc.GetElement(eid) as Room;
+                    if (doc.GetElement(tmpRoom.LevelId) != null && tmpRoom.Location != null)
+                    {
+                        BoundingBoxXYZ bounding = tmpRoom.get_BoundingBox(null);
+                        XYZ Yposition = bounding.Min;
+                        XYZ Xposition = bounding.Max;
+
+                        double xPoint = UnitUtils.ConvertToInternalUnits(1000, UnitTypeId.Millimeters);
+                        double yPoint = UnitUtils.ConvertToInternalUnits(500, UnitTypeId.Millimeters);
+
+                        UV point = new UV(Xposition.X - xPoint, Yposition.Y + yPoint);
+
+                        RoomTag newTag = doc.Create.NewRoomTag(new LinkElementId(tmpRoom.Id), point, doc.ActiveView.Id);
+                        newTag.RoomTagType = tagType;
+                    }
                 }
             }
-
         }
     }
 }
